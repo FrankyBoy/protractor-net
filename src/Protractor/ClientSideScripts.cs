@@ -20,46 +20,73 @@ namespace Protractor
          * arguments[1] {function} callback
          */
         public const string WaitForAngular = @"
-var el = document.querySelector(arguments[0]);
-var callback = arguments[1];
-angular.element(el).injector().get('$browser').notifyWhenNoOutstandingRequests(callback);";
+            var rootSelector = arguments[0];
+            var callback = arguments[1];
+            var el = document.querySelector(rootSelector);
 
-        /**
-         * Tests whether the angular global variable is present on a page. 
-         * Retries in case the page is just loading slowly.
-         *
-         * arguments[0] {string} none.
-         */
+            try {
+                if (!window.angular) {
+                    throw new Error('angular could not be found on the window');
+                }
+                if (angular.getTestability) {
+                    angular.getTestability(el).whenStable(callback);
+                } else {
+                    if (!angular.element(el).injector()) {
+                    throw new Error('root element (' + rootSelector + ') has no injector.' +
+                        ' this may mean it is not inside ng-app.');
+                    }
+                    angular.element(el).injector().get('$browser').notifyWhenNoOutstandingRequests(callback);
+                }
+            } catch (err) {
+                callback(err.message);
+            }";
+
+
         public const string TestForAngular = @"
-var attempts = arguments[0];
-var callback = arguments[arguments.length - 1];
-var check = function(n) {
-    if (window.angular && window.angular.resumeBootstrap) {
-        callback(true);
-    } else if (n < 1) {
-        callback(false);
-    } else {
-        window.setTimeout(function() {check(n - 1)}, 1000);
-    }
-};
-check(attempts);";
+            var attempts = arguments[0];
+            var asyncCallback = arguments[1];  
+
+            var callback = function(args) {
+                setTimeout(function() {
+                    asyncCallback(args);
+                }, 0);
+            };
+            var check = function(n) {
+                try {
+                    if (window.angular && window.angular.resumeBootstrap) {
+                        callback([true, null]);
+                    } else if (n < 1) {
+                        if (window.angular) {
+                            callback([false, 'angular never provided resumeBootstrap']);
+                        } else {
+                            callback([false, 'retries looking for angular exceeded']);
+                        }
+                    } else {
+                        window.setTimeout(function() {check(n - 1);}, 1000);
+                    }
+                } catch (e) {
+                    callback([false, e]);
+                }
+            };
+            check(attempts);";
 
         /**
          * Continue to bootstrap Angular. 
-         * 
          * arguments[0] {array} The module names to load.
          */
-        public const string ResumeAngularBootstrap = @"
-angular.resumeBootstrap(arguments[0].length ? arguments[0].split(',') : []);";
+        public const string ResumeAngularBootstrap = @"angular.resumeBootstrap(arguments[0].length ? arguments[0].split(',') : []);";
 
         /**
          * Return the current url using $location.absUrl().
-         * 
          * arguments[0] {string} The selector housing an ng-app
          */
         public const string GetLocationAbsUrl = @"
-var el = document.querySelector(arguments[0]);
-return angular.element(el).injector().get('$location').absUrl();";
+            var selector = arguments[0];
+            var el = document.querySelector(selector);
+            if (angular.getTestability) {
+                return angular.getTestability(el).getLocation();
+            }
+            return angular.element(el).injector().get('$location').absUrl();";
 
         /**
          * Evaluate an Angular expression in the context of a given element.
@@ -70,9 +97,9 @@ return angular.element(el).injector().get('$location').absUrl();";
          * @return {?Object} The result of the evaluation.
          */
         public const string Evaluate = @"
-var element = arguments[0];
-var expression = arguments[1];
-return angular.element(element).scope().$eval(expression);";
+            var element = arguments[0];
+            var expression = arguments[1];
+            return angular.element(element).scope().$eval(expression);";
 
         #region Locators
 

@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Linq;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-
 using OpenQA.Selenium;
 using OpenQA.Selenium.Internal;
 
@@ -15,10 +13,10 @@ namespace Protractor
     {
         private const string AngularDeferBootstrap = "NG_DEFER_BOOTSTRAP!";
 
-        private IWebDriver driver;
-        private IJavaScriptExecutor jsExecutor;
-        private string rootElement;
-        private NgModule[] mockModules;
+        private readonly IWebDriver _driver;
+        private readonly IJavaScriptExecutor _jsExecutor;
+        private readonly string _rootElement;
+        private readonly NgModule[] _mockModules;
 
         /// <summary>
         /// Creates a new instance of <see cref="NgWebDriver"/> by wrapping a <see cref="IWebDriver"/> instance.
@@ -50,10 +48,10 @@ namespace Protractor
             {
                 throw new NotSupportedException("The WebDriver instance must implement the IJavaScriptExecutor interface.");
             }
-            this.driver = driver;
-            this.jsExecutor = (IJavaScriptExecutor)driver;
-            this.rootElement = rootElement;
-            this.mockModules = mockModules;
+            _driver = driver;
+            _jsExecutor = (IJavaScriptExecutor)driver;
+            _rootElement = rootElement;
+            _mockModules = mockModules;
         }
 
         #region IWrapsDriver Members
@@ -65,7 +63,7 @@ namespace Protractor
         /// </summary>
         public IWebDriver WrappedDriver
         {
-            get { return this.driver; }
+            get { return _driver; }
         }
 
         #endregion
@@ -77,7 +75,7 @@ namespace Protractor
         /// </summary>
         public string RootElement
         {
-            get { return this.rootElement; }
+            get { return _rootElement; }
         }
 
         /// <summary>
@@ -96,7 +94,7 @@ namespace Protractor
         /// </summary>
         public string CurrentWindowHandle
         {
-            get { return this.driver.CurrentWindowHandle; }
+            get { return _driver.CurrentWindowHandle; }
         }
 
         /// <summary>
@@ -106,8 +104,8 @@ namespace Protractor
         {
             get
             {
-                this.WaitForAngular();
-                return this.driver.PageSource;
+                WaitForAngular();
+                return _driver.PageSource;
             }
         }
 
@@ -118,8 +116,8 @@ namespace Protractor
         {
             get
             {
-                this.WaitForAngular();
-                return this.driver.Title;
+                WaitForAngular();
+                return _driver.Title;
             }
         }
 
@@ -130,56 +128,55 @@ namespace Protractor
         {
             get
             {
-                this.WaitForAngular();
-                IHasCapabilities hcDriver = this.driver as IHasCapabilities;
+                WaitForAngular();
+                var hcDriver = _driver as IHasCapabilities;
                 if (hcDriver != null && hcDriver.Capabilities.BrowserName == "internet explorer")
                 {
                     // 'this.driver.Url' does not work on IE
-                    return this.jsExecutor.ExecuteScript(ClientSideScripts.GetLocationAbsUrl, this.rootElement) as string;
+                    return _jsExecutor.ExecuteScript(ClientSideScripts.GetLocationAbsUrl, _rootElement) as string;
                 }
-                else
-                {
-                    return this.driver.Url;
-                }
+
+                return _driver.Url;
             }
             set
             {
                 // TODO: test Safari & Android
-                IHasCapabilities hcDriver = this.driver as IHasCapabilities;
+                var hcDriver = _driver as IHasCapabilities;
                 if (hcDriver != null && 
                     (hcDriver.Capabilities.BrowserName == "internet explorer" ||
                      hcDriver.Capabilities.BrowserName == "phantomjs"))
                 {
                     // Internet Explorer & PhantomJS
-                    this.jsExecutor.ExecuteScript("window.name += '" + AngularDeferBootstrap + "';");
-                    this.driver.Url = value;
+                    _jsExecutor.ExecuteScript("window.name += '" + AngularDeferBootstrap + "';");
+                    _driver.Url = value;
                 }
                 else
                 {
                     // Chrome & Firefox
-                    this.driver.Url = "about:blank";
-                    this.jsExecutor.ExecuteScript("window.name += '" + AngularDeferBootstrap + "'; window.location.href = '" + value + "';");
+                    _driver.Url = "about:blank";
+                    _jsExecutor.ExecuteScript("window.name += '" + AngularDeferBootstrap + "'; window.location.href = '" + value + "';");
                 }
+                
 
                 // Make sure the page is an Angular page.
-                object isAngularApp = this.jsExecutor.ExecuteAsyncScript(ClientSideScripts.TestForAngular, 10);
-                if (isAngularApp is bool && (bool)isAngularApp)
+                var isAngularApp = (ReadOnlyCollection<Object>)_jsExecutor.ExecuteAsyncScript(ClientSideScripts.TestForAngular, 10);
+                if (isAngularApp[0] is bool && (bool)isAngularApp[0])
                 {
                     // At this point, Angular will pause for us, until angular.resumeBootstrap is called.
 
                     // Register extra modules
-                    foreach (NgModule ngModule in this.mockModules)
+                    foreach (NgModule ngModule in _mockModules)
                     {
-                        this.jsExecutor.ExecuteScript(ngModule.Script);
+                        _jsExecutor.ExecuteScript(ngModule.Script);
                     }
                     // Resume Angular bootstrap
-                    this.jsExecutor.ExecuteScript(ClientSideScripts.ResumeAngularBootstrap,
-                        String.Join(",", this.mockModules.Select(m => m.Name).ToArray()));
+                    _jsExecutor.ExecuteScript(ClientSideScripts.ResumeAngularBootstrap,
+                        String.Join(",", _mockModules.Select(m => m.Name).ToArray()));
                 }
                 else
                 {
                     throw new InvalidOperationException(
-                        String.Format("Angular could not be found on the page '{0}'", value));
+                        String.Format("Angular could not be found on the page '{0}'", isAngularApp[1]));
                 }
             }
         }
@@ -189,7 +186,7 @@ namespace Protractor
         /// </summary>
         public ReadOnlyCollection<string> WindowHandles
         {
-            get { return this.driver.WindowHandles; }
+            get { return _driver.WindowHandles; }
         }
 
         /// <summary>
@@ -197,7 +194,7 @@ namespace Protractor
         /// </summary>
         public void Close()
         {
-            this.driver.Close();
+            _driver.Close();
         }
 
         /// <summary>
@@ -208,7 +205,7 @@ namespace Protractor
         /// </returns>
         public IOptions Manage()
         {
-            return this.driver.Manage();
+            return _driver.Manage();
         }
 
         /// <summary>
@@ -220,7 +217,7 @@ namespace Protractor
         /// </returns>
         public INavigation Navigate()
         {
-            return new NgNavigation(this, this.driver.Navigate());
+            return new NgNavigation(this, _driver.Navigate());
         }
 
         /// <summary>
@@ -228,7 +225,7 @@ namespace Protractor
         /// </summary>
         public void Quit()
         {
-            this.driver.Quit();
+            _driver.Quit();
         }
 
         /// <summary>
@@ -239,7 +236,7 @@ namespace Protractor
         /// </returns>
         public ITargetLocator SwitchTo()
         {
-            return this.driver.SwitchTo();
+            return _driver.SwitchTo();
         }
 
         /// <summary>
@@ -250,8 +247,8 @@ namespace Protractor
         /// <exception cref="NoSuchElementException">If no element matches the criteria.</exception>
         public NgWebElement FindElement(By by)
         {
-            this.WaitForAngular();
-            return new NgWebElement(this, this.driver.FindElement(by));
+            WaitForAngular();
+            return new NgWebElement(this, _driver.FindElement(by));
         }
 
         /// <summary>
@@ -265,19 +262,19 @@ namespace Protractor
         /// </returns>
         public ReadOnlyCollection<NgWebElement> FindElements(By by)
         {
-            this.WaitForAngular();
-            return new ReadOnlyCollection<NgWebElement>(this.driver.FindElements(by).Select(e => new NgWebElement(this, e)).ToList());
+            WaitForAngular();
+            return new ReadOnlyCollection<NgWebElement>(_driver.FindElements(by).Select(e => new NgWebElement(this, e)).ToList());
         }
 
         IWebElement ISearchContext.FindElement(By by)
         {
-            return this.FindElement(by);
+            return FindElement(by);
         }
 
         ReadOnlyCollection<IWebElement> ISearchContext.FindElements(By by)
         {
-            this.WaitForAngular();
-            return new ReadOnlyCollection<IWebElement>(this.driver.FindElements(by).Select(e => (IWebElement)new NgWebElement(this, e)).ToList());
+            WaitForAngular();
+            return new ReadOnlyCollection<IWebElement>(_driver.FindElements(by).Select(e => (IWebElement)new NgWebElement(this, e)).ToList());
         }
 
         /// <summary>
@@ -286,16 +283,16 @@ namespace Protractor
         /// </summary>
         public void Dispose()
         {
-            this.driver.Dispose();
+            _driver.Dispose();
         }
 
         #endregion
 
         internal void WaitForAngular()
         {
-            if (!this.IgnoreSynchronization)
+            if (!IgnoreSynchronization)
             {
-                this.jsExecutor.ExecuteAsyncScript(ClientSideScripts.WaitForAngular, this.rootElement);
+                _jsExecutor.ExecuteAsyncScript(ClientSideScripts.WaitForAngular, _rootElement);
             }
         }
     }

@@ -157,27 +157,19 @@ namespace Protractor
                     _jsExecutor.ExecuteScript("window.name += '" + AngularDeferBootstrap + "'; window.location.href = '" + value + "';");
                 }
                 
-
                 // Make sure the page is an Angular page.
-                var isAngularApp = (ReadOnlyCollection<Object>)_jsExecutor.ExecuteAsyncScript(ClientSideScripts.TestForAngular, 10);
-                if (isAngularApp[0] is bool && (bool)isAngularApp[0])
+                TestForAngular();
+                
+                // At this point, Angular will pause for us, until angular.resumeBootstrap is called.
+                // Register extra modules
+                foreach (var ngModule in _mockModules)
                 {
-                    // At this point, Angular will pause for us, until angular.resumeBootstrap is called.
+                    _jsExecutor.ExecuteScript(ngModule.Script);
+                }
 
-                    // Register extra modules
-                    foreach (NgModule ngModule in _mockModules)
-                    {
-                        _jsExecutor.ExecuteScript(ngModule.Script);
-                    }
-                    // Resume Angular bootstrap
-                    _jsExecutor.ExecuteScript(ClientSideScripts.ResumeAngularBootstrap,
-                        String.Join(",", _mockModules.Select(m => m.Name).ToArray()));
-                }
-                else
-                {
-                    throw new InvalidOperationException(
-                        String.Format("Angular could not be found on the page '{0}'", isAngularApp[1]));
-                }
+                // Resume Angular bootstrap
+                _jsExecutor.ExecuteScript(ClientSideScripts.ResumeAngularBootstrap,
+                    String.Join(",", _mockModules.Select(m => m.Name).ToArray()));
             }
         }
 
@@ -288,12 +280,28 @@ namespace Protractor
 
         #endregion
 
-        internal void WaitForAngular()
+
+        #region Wrappers for ClientSideScripts
+        /// <summary>
+        /// Waits for angular to finish its thing
+        /// </summary>
+        public void WaitForAngular()
         {
             if (!IgnoreSynchronization)
             {
                 _jsExecutor.ExecuteAsyncScript(ClientSideScripts.WaitForAngular, _rootElement);
             }
         }
+
+        internal void TestForAngular(int retries = 10)
+        {
+            var isAngularApp = (ReadOnlyCollection<Object>)_jsExecutor.ExecuteAsyncScript(ClientSideScripts.TestForAngular, retries);
+
+            if (! (isAngularApp[0] is bool) || (bool)isAngularApp[0] == false)
+            {
+                throw new InvalidOperationException(String.Format("Angular could not be found on the page '{0}'", isAngularApp[1]));
+            }
+        }
+        #endregion
     }
 }
